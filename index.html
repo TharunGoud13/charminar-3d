@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CHARMINAR & TAJ MAHAL — India's Icons</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: auto; }
+
+    body {
+      overflow-x: hidden;
+      background: #08080F;
+      font-family: 'Courier New', Courier, monospace;
+      color: #FFFFFF;
+      height: 600vh; /* scroll room for orbit + transition */
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 0;
+    }
+
+    /* ── Annotation overlay ─────────────────────────── */
+    #linesSvg {
+      position: fixed; top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 5; pointer-events: none;
+    }
+    .ann-line {
+      stroke: rgba(255,255,255,0.3);
+      stroke-width: 1;
+      stroke-dasharray: 4 3;
+      transition: opacity 0.3s;
+    }
+    .ann-label {
+      position: fixed; z-index: 6;
+      pointer-events: none;
+      display: flex; align-items: center; gap: 4px;
+      opacity: 0; transition: opacity 0.35s;
+      font-size: 12px; letter-spacing: 0.12em;
+      text-shadow: 0 0 10px rgba(212,135,10,0.7);
+      white-space: nowrap;
+    }
+    .ann-label.visible { opacity: 1; }
+
+    /* ── UI Overlay ───────────────────────────────────── */
+    .overlay {
+      position: fixed; z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.6s ease;
+    }
+    .overlay button { pointer-events: auto; }
+
+    /* Titles */
+    .title-block {
+      position: fixed; top: 40px; left: 48px;
+      z-index: 10; pointer-events: none;
+      transition: opacity 0.5s ease;
+    }
+    .title-block h1 {
+      font-size: clamp(26px, 3.8vw, 48px);
+      font-weight: 700;
+      letter-spacing: 0.35em;
+      line-height: 1;
+    }
+    .title-block .sub {
+      margin-top: 8px;
+      font-size: clamp(11px, 1.1vw, 13px);
+      opacity: 0.55; letter-spacing: 0.15em;
+    }
+    .title-block .loc {
+      margin-top: 4px;
+      font-size: clamp(11px, 1.1vw, 13px);
+      opacity: 0.45; letter-spacing: 0.15em;
+    }
+
+    /* Manifesto */
+    .manifesto-block {
+      position: fixed; top: 40px; right: 48px;
+      z-index: 10; pointer-events: none;
+      text-align: right; max-width: 360px;
+      transition: opacity 0.5s ease;
+    }
+    .manifesto-block .heading {
+      font-size: 13px; letter-spacing: 0.3em;
+      opacity: 0.45; margin-bottom: 12px;
+    }
+    .manifesto-block p {
+      font-size: clamp(11px, 1vw, 13px);
+      line-height: 1.7; opacity: 0.65;
+    }
+
+    /* Bottom controls */
+    .bottom-left {
+      position: fixed; bottom: 40px; left: 48px;
+      z-index: 10; pointer-events: none;
+    }
+    .bottom-left button { pointer-events: auto; }
+    .scroll-hint {
+      font-size: 12px; letter-spacing: 0.2em;
+      opacity: 0.5; margin-bottom: 16px;
+      animation: pulse 2.5s ease-in-out infinite;
+      transition: opacity 0.5s;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.85; }
+    }
+    .sound-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px; letter-spacing: 0.15em;
+      padding: 8px 16px; cursor: pointer;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .sound-btn:hover {
+      background: rgba(255,255,255,0.14);
+      border-color: rgba(255,255,255,0.35);
+    }
+
+    /* Scroll progress */
+    .scroll-indicator {
+      position: fixed; bottom: 40px; right: 48px;
+      z-index: 10;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+    }
+    .scroll-bar-track {
+      width: 2px; height: 60px;
+      background: rgba(255,255,255,0.12);
+      position: relative; border-radius: 1px;
+    }
+    .scroll-bar-fill {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 0%;
+      background: #D4870A;
+      border-radius: 1px;
+    }
+    .scroll-pct {
+      font-size: 11px; opacity: 0.45;
+      letter-spacing: 0.1em;
+    }
+
+    /* Loader */
+    #loader {
+      position: fixed; inset: 0;
+      background: #08080F; z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+      font-size: 13px; letter-spacing: 0.3em;
+      transition: opacity 1s ease;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    .loader-bar {
+      width: 120px; height: 2px;
+      background: rgba(255,255,255,0.1);
+      position: relative; overflow: hidden;
+    }
+    .loader-bar::after {
+      content: '';
+      position: absolute; left: -40%;
+      width: 40%; height: 100%;
+      background: #D4870A;
+      animation: loadSlide 1s ease infinite;
+    }
+    @keyframes loadSlide {
+      to { left: 100%; }
+    }
+
+    /* Center monument indicator */
+    .monument-counter {
+      position: fixed;
+      bottom: 40px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      font-size: 11px; letter-spacing: 0.25em;
+      opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden source images -->
+  <img id="img1" src="charminar.jpg" style="display:none" />
+  <img id="img2" src="tajmahal.jpeg" style="display:none" />
+
+  <!-- Loader -->
+  <div id="loader">
+    <span>LOADING</span>
+    <div class="loader-bar"></div>
+  </div>
+
+  <!-- Canvas -->
+  <canvas id="canvas"></canvas>
+
+  <!-- SVG annotation lines -->
+  <svg id="linesSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+  <!-- Annotation labels -->
+  <div id="annWrap"></div>
+
+  <!-- ── Title: Charminar ──────────────────────────────── -->
+  <div class="title-block" id="title1">
+    <h1>CHARMINAR</h1>
+    <div class="sub">// Est. 1591</div>
+    <div class="loc">Hyderabad, India</div>
+  </div>
+
+  <!-- ── Title: Taj Mahal ──────────────────────────────── -->
+  <div class="title-block" id="title2" style="opacity:0">
+    <h1>TAJ MAHAL</h1>
+    <div class="sub">// Est. 1653</div>
+    <div class="loc">Agra, India</div>
+  </div>
+
+  <!-- ── Manifesto: Charminar ──────────────────────────── -->
+  <div class="manifesto-block" id="manifesto1">
+    <div class="heading">////// About</div>
+    <p>
+      An iconic symbol of Hyderabad's rich cultural heritage,
+      standing at the heart of the old city for over 400&nbsp;years.
+      Four minarets rise where history meets the sky.
+    </p>
+  </div>
+
+  <!-- ── Manifesto: Taj Mahal ──────────────────────────── -->
+  <div class="manifesto-block" id="manifesto2" style="opacity:0">
+    <div class="heading">////// About</div>
+    <p>
+      A timeless monument to eternal love, the Taj Mahal rises
+      in perfect symmetry — white marble against the Agra sky,
+      a wonder that transcends centuries.
+    </p>
+  </div>
+
+  <!-- Bottom controls -->
+  <div class="bottom-left">
+    <div class="scroll-hint" id="scrollHint">&#8595; Scroll down to explore.</div>
+    <button class="sound-btn" id="soundBtn">&#128266; Sound: Off</button>
+  </div>
+
+  <div class="monument-counter" id="monCounter">01 / 02</div>
+
+  <div class="scroll-indicator">
+    <div class="scroll-bar-track">
+      <div class="scroll-bar-fill" id="scrollFill"></div>
+    </div>
+    <span class="scroll-pct" id="scrollPct">0%</span>
+  </div>
+
+  <!-- ── Three.js CDN ─────────────────────────────────── -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    /* ================================================================
+       INDIA'S ICONS — Dual-monument 3D brick parallax experience
+       Three.js r128 · Single-file · No build tools
+       ================================================================ */
+
+    // ── Palette ──────────────────────────────────────────
+    const AMBER   = 0xD4870A;
+    const BURNT   = 0xC1440E;
+    const INDIGO  = 0x1A1035;
+    const BG      = 0x08080F;
+
+    // ── Renderer ─────────────────────────────────────────
+    const canvas   = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+
+    // ── Scene ────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(BG);
+    scene.fog = new THREE.FogExp2(BG, 0.014);
+
+    // ── Camera ───────────────────────────────────────────
+    const camera = new THREE.PerspectiveCamera(
+      50, window.innerWidth / window.innerHeight, 0.1, 300
+    );
+    camera.position.set(0, 0, 14);
+
+    // ── Lights ───────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0x554466, 0.5));
+
+    const keyLight = new THREE.DirectionalLight(0xFFDDAA, 0.7);
+    keyLight.position.set(8, 10, 12);
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0x6666AA, 0.25);
+    rimLight.position.set(-6, 4, -10);
+    scene.add(rimLight);
+
+    // Warm flanking fills
+    const fillL = new THREE.PointLight(AMBER, 1.0, 22);
+    fillL.position.set(-9, -2, 6);
+    scene.add(fillL);
+    const fillR = new THREE.PointLight(AMBER, 1.0, 22);
+    fillR.position.set(9, -2, 6);
+    scene.add(fillR);
+
+    // Cursor-following glow light
+    const cursorLight = new THREE.PointLight(0xFFEEDD, 0, 7, 1.8);
+    cursorLight.position.set(0, 0, 4);
+    scene.add(cursorLight);
+
+    // ── Sky Dome ─────────────────────────────────────────
+    (function() {
+      const geo = new THREE.SphereGeometry(100, 32, 20);
+      const colors = [];
+      const cTop = new THREE.Color(INDIGO);
+      const cMid = new THREE.Color(0x2D1545);
+      const cBot = new THREE.Color(0x8A5500);
+      const pos = geo.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        const t = (pos.getY(i) + 100) / 200;
+        const c = new THREE.Color();
+        t < 0.2 ? c.lerpColors(cBot, cMid, t / 0.2) : c.lerpColors(cMid, cTop, (t - 0.2) / 0.8);
+        colors.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+    })();
+
+    // ── Particles ────────────────────────────────────────
+    const P_COUNT = 400;
+    const pSpeeds = new Float32Array(P_COUNT);
+    const pGeo = new THREE.BufferGeometry();
+    (function() {
+      const pos = new Float32Array(P_COUNT * 3);
+      for (let i = 0; i < P_COUNT; i++) {
+        pos[i*3]   = (Math.random()-0.5) * 50;
+        pos[i*3+1] = (Math.random()-0.5) * 35;
+        pos[i*3+2] = (Math.random()-0.5) * 30 - 8;
+        pSpeeds[i] = 0.003 + Math.random() * 0.01;
+      }
+      pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      scene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({
+        color: 0xFFCC88, size: 0.1,
+        transparent: true, opacity: 0.45,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      })));
+    })();
+
+    // ── Global State ─────────────────────────────────────
+    const mouse = new THREE.Vector2(9999, 9999);
+    let mouseOnScreen = false;
+    let scrollProgress = 0, targetScroll = 0;
+    let sceneBuilt = false;
+
+    const raycaster = new THREE.Raycaster();
+    const hoverPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const worldMouse = new THREE.Vector3();
+
+    // Two monument grids
+    const grids = []; // { group, tiles, gridW, gridH }
+
+    // Shared side material (warm dark, not black)
+    const sideMat = new THREE.MeshStandardMaterial({
+      color: 0x221A10, roughness: 0.92, metalness: 0
+    });
+
+    // ── Annotation config per monument ───────────────────
+    const annConfigs = [
+      { // Charminar
+        points: [
+          { col: 3, row: 2, text: '91' },
+          { col: 12, row: 1, text: '70' },
+          { col: 7, row: 5, text: '48' },
+          { col: 3, row: 8, text: '69' },
+          { col: 7, row: 12, text: '36' },
+          { col: 12, row: 7, text: '54' },
+        ],
+        links: [[0,1],[1,2],[2,3],[2,4],[1,5]]
+      },
+      { // Taj Mahal
+        points: [
+          { col: 8, row: 1, text: '87' },
+          { col: 4, row: 4, text: '43' },
+          { col: 12, row: 4, text: '61' },
+          { col: 8, row: 8, text: '29' },
+          { col: 3, row: 7, text: '55' },
+        ],
+        links: [[0,1],[0,2],[1,3],[2,3],[1,4]]
+      }
+    ];
+    const annState = []; // [{els, lines, tileIndices}] per grid
+
+    /* ═══════════════════════════════════════════════════════
+       CREATE TILE GRID from an image texture
+       Returns { group, tiles }
+       ═══════════════════════════════════════════════════════ */
+    function createGrid(texture, imgW, imgH) {
+      const aspect = imgW / imgH;
+
+      // Adaptive grid: ~200 tiles, proportional to aspect
+      const ROWS = Math.round(Math.sqrt(200 / aspect));
+      const COLS = Math.round(ROWS * aspect);
+
+      // Size tiles to fill ~85% of viewport height at camera z=14
+      const vFov = camera.fov * Math.PI / 180;
+      const visH = 2 * Math.tan(vFov / 2) * 14;
+      const GAP = 0.003;
+      const STEP = (visH * 0.85) / ROWS;
+      const TILE_W = STEP - GAP;
+      const TILE_H = STEP - GAP;
+      const TILE_D = 0.14;
+
+      const gridW = COLS * STEP;
+      const gridH = ROWS * STEP;
+
+      const group = new THREE.Group();
+      const tiles = [];
+
+      for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+          const geo = new THREE.BoxGeometry(TILE_W, TILE_H, TILE_D);
+
+          // ── Front-face UV: map to this tile's image region ──
+          const uv = geo.getAttribute('uv');
+          const u0 = col / COLS, u1 = (col + 1) / COLS;
+          const v0 = 1 - (row + 1) / ROWS, v1 = 1 - row / ROWS;
+          // Front face (+z) vertices: indices 16-19
+          uv.setXY(16, u0, v1); // top-left
+          uv.setXY(17, u1, v1); // top-right
+          uv.setXY(18, u0, v0); // bottom-left
+          uv.setXY(19, u1, v0); // bottom-right
+          uv.needsUpdate = true;
+
+          // Unique front material per tile (for emissive control)
+          const frontMat = new THREE.MeshStandardMaterial({
+            map: texture, roughness: 0.5, metalness: 0.05,
+            emissive: new THREE.Color(0xFFDDBB),
+            emissiveIntensity: 0,
+          });
+
+          const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, sideMat];
+          const mesh = new THREE.Mesh(geo, materials);
+
+          // Rest position (centered grid)
+          const x = (col - COLS / 2 + 0.5) * STEP;
+          const y = (ROWS / 2 - row - 0.5) * STEP;
+
+          mesh.userData.restPos = new THREE.Vector3(x, y, 0);
+          mesh.userData.col = col;
+          mesh.userData.row = row;
+          mesh.userData.randRotX = (Math.random() - 0.5) * 2;
+          mesh.userData.randRotY = (Math.random() - 0.5) * 2;
+          mesh.userData.phase = Math.random() * Math.PI * 2;
+
+          // Scattered position (for assembly/disassembly)
+          // Keep scattered tiles in front of camera (positive z) so they stay visible
+          mesh.userData.scatterPos = new THREE.Vector3(
+            (Math.random() - 0.5) * 24,
+            (Math.random() - 0.5) * 18,
+            (Math.random() - 0.5) * 8
+          );
+          mesh.userData.scatterRot = new THREE.Euler(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+          );
+          mesh.userData.animDelay = Math.random() * 0.4;
+
+          // Start at scattered position
+          mesh.position.copy(mesh.userData.scatterPos);
+          mesh.rotation.copy(mesh.userData.scatterRot);
+
+          group.add(mesh);
+          tiles.push(mesh);
+        }
+      }
+
+      scene.add(group);
+      return { group, tiles, COLS, ROWS, gridW, gridH };
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       BUILD ANNOTATIONS for a grid
+       ═══════════════════════════════════════════════════════ */
+    function buildAnnotations(gridIdx, gridData) {
+      const cfg = annConfigs[gridIdx];
+      const annWrap = document.getElementById('annWrap');
+      const svgEl = document.getElementById('linesSvg');
+      const els = [];
+      const lines = [];
+      const tileIndices = [];
+
+      cfg.points.forEach(pt => {
+        const c = Math.min(pt.col, gridData.COLS - 1);
+        const r = Math.min(pt.row, gridData.ROWS - 1);
+        tileIndices.push(r * gridData.COLS + c);
+
+        const el = document.createElement('div');
+        el.className = 'ann-label';
+        el.setAttribute('data-grid', gridIdx);
+        el.innerHTML = '<span class="ann-cross">+</span><span>' + pt.text + '</span>';
+        annWrap.appendChild(el);
+        els.push(el);
+      });
+
+      cfg.links.forEach(([a, b]) => {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.classList.add('ann-line');
+        line.setAttribute('data-grid', gridIdx);
+        line.style.opacity = '0';
+        svgEl.appendChild(line);
+        lines.push({ el: line, a, b });
+      });
+
+      return { els, lines, tileIndices };
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       LOAD IMAGES & BUILD SCENE
+       ═══════════════════════════════════════════════════════ */
+    let loadedCount = 0;
+    const textures = [null, null];
+    const imgDims = [null, null];
+
+    function onImageLoaded(idx, imgEl) {
+      const tex = new THREE.Texture(imgEl);
+      tex.needsUpdate = true;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      textures[idx] = tex;
+      imgDims[idx] = { w: imgEl.naturalWidth, h: imgEl.naturalHeight };
+      loadedCount++;
+      if (loadedCount >= 2) initScene();
+    }
+
+    function tryLoad(id, idx) {
+      const el = document.getElementById(id);
+      const handler = () => onImageLoaded(idx, el);
+      if (el.complete && el.naturalWidth > 0) handler();
+      else {
+        el.addEventListener('load', handler);
+        el.addEventListener('error', () => {
+          // Fallback gradient
+          const c = document.createElement('canvas');
+          c.width = 512; c.height = 680;
+          const ctx = c.getContext('2d');
+          const g = ctx.createLinearGradient(0, 0, 0, 680);
+          g.addColorStop(0, '#5599CC');
+          g.addColorStop(0.3, '#C9B99A');
+          g.addColorStop(1, '#3A2A18');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, 512, 680);
+          const tex = new THREE.CanvasTexture(c);
+          textures[idx] = tex;
+          imgDims[idx] = { w: 512, h: 680 };
+          loadedCount++;
+          if (loadedCount >= 2) initScene();
+        });
+      }
+    }
+    tryLoad('img1', 0);
+    tryLoad('img2', 1);
+
+    function initScene() {
+      // Create both grids
+      for (let i = 0; i < 2; i++) {
+        const gd = createGrid(textures[i], imgDims[i].w, imgDims[i].h);
+        grids.push(gd);
+        annState.push(buildAnnotations(i, gd));
+      }
+
+      // Grid 1 (Taj Mahal) starts hidden — scatter far
+      grids[1].group.visible = true;
+
+      sceneBuilt = true;
+      setTimeout(() => document.getElementById('loader').classList.add('hidden'), 400);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       EVENTS
+       ═══════════════════════════════════════════════════════ */
+    window.addEventListener('mousemove', e => {
+      mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      mouseOnScreen = true;
+    });
+    window.addEventListener('mouseleave', () => { mouseOnScreen = false; });
+    window.addEventListener('mouseenter', () => { mouseOnScreen = true; });
+    window.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      mouse.x = (t.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(t.clientY / window.innerHeight) * 2 + 1;
+      mouseOnScreen = true;
+    }, { passive: true });
+    window.addEventListener('touchend', () => { mouseOnScreen = false; });
+
+    window.addEventListener('scroll', () => {
+      const max = document.body.scrollHeight - window.innerHeight;
+      targetScroll = max > 0 ? Math.min(window.scrollY / max, 1) : 0;
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Sound
+    const soundBtn = document.getElementById('soundBtn');
+    let soundOn = false, audioCtx, oscA, oscB, gainA, gainB;
+    soundBtn.addEventListener('click', () => {
+      soundOn = !soundOn;
+      soundBtn.innerHTML = soundOn ? '&#128266; Sound: On' : '&#128266; Sound: Off';
+      if (soundOn) {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        oscA = audioCtx.createOscillator(); oscA.type = 'sine'; oscA.frequency.value = 75;
+        gainA = audioCtx.createGain(); gainA.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainA.gain.linearRampToValueAtTime(0.03, audioCtx.currentTime + 2);
+        oscA.connect(gainA).connect(audioCtx.destination); oscA.start();
+        oscB = audioCtx.createOscillator(); oscB.type = 'sine'; oscB.frequency.value = 118;
+        gainB = audioCtx.createGain(); gainB.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainB.gain.linearRampToValueAtTime(0.012, audioCtx.currentTime + 2.5);
+        oscB.connect(gainB).connect(audioCtx.destination); oscB.start();
+      } else if (oscA) {
+        gainA.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+        gainB.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+        const _a = oscA, _b = oscB;
+        setTimeout(() => { try { _a.stop(); _b.stop(); } catch(e){} }, 600);
+      }
+    });
+
+    /* ═══════════════════════════════════════════════════════
+       HELPERS
+       ═══════════════════════════════════════════════════════ */
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+    function easeInOutCubic(t) {
+      return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
+    }
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function toScreen(v3) {
+      const v = v3.clone().project(camera);
+      return {
+        x: (v.x + 1) * 0.5 * window.innerWidth,
+        y: (-v.y + 1) * 0.5 * window.innerHeight,
+      };
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       ANIMATION LOOP
+       ═══════════════════════════════════════════════════════ */
+    const clock = new THREE.Clock();
+    const scrollFill = document.getElementById('scrollFill');
+    const scrollPctEl = document.getElementById('scrollPct');
+    const scrollHint = document.getElementById('scrollHint');
+    const title1 = document.getElementById('title1');
+    const title2 = document.getElementById('title2');
+    const manifesto1 = document.getElementById('manifesto1');
+    const manifesto2 = document.getElementById('manifesto2');
+    const monCounter = document.getElementById('monCounter');
+
+    // Hover config
+    const HOVER_R = 3.2;
+    const MAX_Z = 2.5;
+    const MAX_PUSH = 0.3;
+    const MAX_TILT = 0.45;
+    const MAX_EMISSIVE = 0.5;
+
+    // Initial assembly
+    const ASSEMBLY_DUR = 3.0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (!sceneBuilt) { renderer.render(scene, camera); return; }
+
+      const dt = clock.getDelta();
+      const elapsed = clock.getElapsedTime();
+
+      // ── Smooth scroll ──────────────────────────────────
+      scrollProgress = lerp(scrollProgress, targetScroll, 0.08);
+      const pct = Math.round(scrollProgress * 100);
+      scrollFill.style.height = pct + '%';
+      scrollPctEl.textContent = pct + '%';
+
+      // ── Scroll phases ──────────────────────────────────
+      // 0.0 - 0.35 : Charminar orbit
+      // 0.35 - 0.65: Transition
+      // 0.65 - 1.0 : Taj Mahal orbit
+      const transRaw = clamp((scrollProgress - 0.35) / 0.3, 0, 1);
+      const transT = easeInOutCubic(transRaw);
+
+      const initialDone = elapsed > ASSEMBLY_DUR;
+      const initT = easeOutCubic(clamp(elapsed / ASSEMBLY_DUR, 0, 1));
+
+      // Assembly targets: 1 = assembled, 0 = scattered
+      let charm_T = initialDone ? (1 - transT) : initT;
+      let taj_T   = initialDone ? transT : 0;
+
+      // Active grid for hover (only when mostly assembled)
+      const activeGrid = transT < 0.5 ? 0 : 1;
+      const activeAssembly = activeGrid === 0 ? charm_T : taj_T;
+      const hoverEnabled = activeAssembly > 0.85;
+
+      // ── UI text transitions ────────────────────────────
+      title1.style.opacity = clamp(1 - transT * 2.5, 0, 1);
+      title2.style.opacity = clamp(transT * 2.5 - 1.5, 0, 1);
+      manifesto1.style.opacity = clamp(1 - transT * 2.5, 0, 1);
+      manifesto2.style.opacity = clamp(transT * 2.5 - 1.5, 0, 1);
+      scrollHint.style.opacity = scrollProgress < 0.05 ? 0.5 : Math.max(0, 0.5 - scrollProgress * 2);
+      monCounter.textContent = transT < 0.5 ? '01 / 02' : '02 / 02';
+
+      // ── Camera: always stays in front, subtle movement ──
+      // Gentle lateral sway (oscillates left-right over full scroll)
+      const lateralSway = Math.sin(scrollProgress * Math.PI * 1.5) * 2.5;
+      // Zoom closer during the middle (transition), back out at ends
+      const scrollSin = Math.sin(scrollProgress * Math.PI);
+      const camZoom = scrollSin * 2.5;
+      const camRise = scrollSin * 2;
+
+      // Mouse parallax on top
+      const mouseSwayX = mouseOnScreen ? mouse.x * 0.5 : 0;
+      const mouseSwayY = mouseOnScreen ? mouse.y * 0.3 : 0;
+
+      const camTargetX = lateralSway + mouseSwayX;
+      const camTargetY = camRise + mouseSwayY;
+      const camTargetZ = 14 - camZoom; // always positive, never behind tiles
+
+      camera.position.x = lerp(camera.position.x, camTargetX, 0.05);
+      camera.position.y = lerp(camera.position.y, camTargetY, 0.05);
+      camera.position.z = lerp(camera.position.z, camTargetZ, 0.05);
+      camera.lookAt(0, camRise * 0.3, 0);
+
+      // ── Monument groups: macro parallax tilt ───────────
+      const tiltX = mouseOnScreen ? -mouse.y * 0.035 : 0;
+      const tiltY = mouseOnScreen ? mouse.x * 0.05 : 0;
+      grids.forEach(g => {
+        g.group.rotation.x = lerp(g.group.rotation.x, tiltX, 0.04);
+        g.group.rotation.y = lerp(g.group.rotation.y, tiltY, 0.04);
+      });
+
+      // ── Mouse world position on z=0 plane ──────────────
+      let mouseWorldValid = false;
+      if (mouseOnScreen && hoverEnabled) {
+        raycaster.setFromCamera(mouse, camera);
+        const hit = raycaster.ray.intersectPlane(hoverPlane, worldMouse);
+        if (hit) {
+          const local = worldMouse.clone();
+          grids[activeGrid].group.worldToLocal(local);
+          worldMouse.copy(local);
+          mouseWorldValid = true;
+          // Position cursor light
+          const lp = worldMouse.clone();
+          grids[activeGrid].group.localToWorld(lp);
+          cursorLight.position.set(lp.x, lp.y, lp.z + 3);
+        }
+      }
+
+      // ── Update cursor light ────────────────────────────
+      cursorLight.intensity = lerp(
+        cursorLight.intensity,
+        mouseWorldValid ? 4 : 0,
+        0.08
+      );
+
+      // ── Update tiles for both grids ────────────────────
+      const assemblyTargets = [charm_T, taj_T];
+
+      for (let gi = 0; gi < 2; gi++) {
+        const { tiles } = grids[gi];
+        const asmT = assemblyTargets[gi];
+        const isActive = gi === activeGrid && hoverEnabled;
+
+        for (let i = 0; i < tiles.length; i++) {
+          const tile = tiles[i];
+          const rest = tile.userData.restPos;
+          const scat = tile.userData.scatterPos;
+          const sRot = tile.userData.scatterRot;
+
+          // Base position = lerp between scattered and rest
+          const delay = tile.userData.animDelay;
+          const localAsm = clamp((asmT - delay * 0.3) / (1 - delay * 0.3), 0, 1);
+          const easedAsm = easeOutCubic(localAsm);
+
+          let baseX = lerp(scat.x, rest.x, easedAsm);
+          let baseY = lerp(scat.y, rest.y, easedAsm);
+          let baseZ = lerp(scat.z, rest.z, easedAsm);
+          let baseRX = lerp(sRot.x, 0, easedAsm);
+          let baseRY = lerp(sRot.y, 0, easedAsm);
+          let baseRZ = lerp(sRot.z, 0, easedAsm);
+
+          // Hover displacement (only for active grid)
+          let emissiveTarget = 0;
+          if (isActive && mouseWorldValid) {
+            const dx = rest.x - worldMouse.x;
+            const dy = rest.y - worldMouse.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < HOVER_R) {
+              const s = Math.pow(1 - dist / HOVER_R, 2.2);
+              baseZ += s * MAX_Z;
+              if (dist > 0.01) {
+                baseX += (dx / dist) * s * MAX_PUSH;
+                baseY += (dy / dist) * s * MAX_PUSH;
+              }
+              baseRX += tile.userData.randRotX * s * MAX_TILT;
+              baseRY += tile.userData.randRotY * s * MAX_TILT;
+              emissiveTarget = s * MAX_EMISSIVE;
+            }
+          }
+
+          // Subtle float at rest
+          if (easedAsm > 0.95) {
+            baseY += Math.sin(elapsed * 0.35 + tile.userData.phase) * 0.006;
+          }
+
+          // Smooth lerp (fast enough to keep up with scroll-driven assembly)
+          tile.position.x = lerp(tile.position.x, baseX, 0.14);
+          tile.position.y = lerp(tile.position.y, baseY, 0.14);
+          tile.position.z = lerp(tile.position.z, baseZ, 0.14);
+          tile.rotation.x = lerp(tile.rotation.x, baseRX, 0.12);
+          tile.rotation.y = lerp(tile.rotation.y, baseRY, 0.12);
+          tile.rotation.z = lerp(tile.rotation.z, baseRZ, 0.12);
+
+          // Emissive glow
+          tile.material[4].emissiveIntensity = lerp(
+            tile.material[4].emissiveIntensity, emissiveTarget, 0.1
+          );
+        }
+      }
+
+      // ── Update annotations ─────────────────────────────
+      for (let gi = 0; gi < 2; gi++) {
+        const { els, lines, tileIndices } = annState[gi];
+        const gridTiles = grids[gi].tiles;
+
+        els.forEach((el, i) => {
+          const ti = tileIndices[i];
+          if (ti >= gridTiles.length) { el.classList.remove('visible'); return; }
+          const tile = gridTiles[ti];
+          const displaced = tile.position.z > 0.25;
+          el.classList.toggle('visible', displaced);
+          if (displaced) {
+            const wp = new THREE.Vector3();
+            tile.getWorldPosition(wp);
+            const sp = toScreen(wp);
+            el.style.left = (sp.x + 14) + 'px';
+            el.style.top  = (sp.y - 8) + 'px';
+          }
+        });
+
+        lines.forEach(({ el, a, b }) => {
+          const tA = gridTiles[tileIndices[a]];
+          const tB = gridTiles[tileIndices[b]];
+          if (!tA || !tB) return;
+          const show = tA.position.z > 0.25 && tB.position.z > 0.25;
+          el.style.opacity = show ? '1' : '0';
+          if (show) {
+            const wA = new THREE.Vector3(); tA.getWorldPosition(wA);
+            const wB = new THREE.Vector3(); tB.getWorldPosition(wB);
+            const sA = toScreen(wA), sB = toScreen(wB);
+            el.setAttribute('x1', sA.x); el.setAttribute('y1', sA.y);
+            el.setAttribute('x2', sB.x); el.setAttribute('y2', sB.y);
+          }
+        });
+      }
+
+      // ── Animate particles ──────────────────────────────
+      const pa = pGeo.attributes.position.array;
+      for (let i = 0; i < P_COUNT; i++) {
+        pa[i*3+1] += pSpeeds[i];
+        pa[i*3]   += Math.sin(elapsed * 0.2 + i) * 0.001;
+        if (pa[i*3+1] > 20) {
+          pa[i*3+1] = -18;
+          pa[i*3]   = (Math.random()-0.5) * 50;
+          pa[i*3+2] = (Math.random()-0.5) * 30 - 8;
+        }
+      }
+      pGeo.attributes.position.needsUpdate = true;
+
+      // ── Render ─────────────────────────────────────────
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
