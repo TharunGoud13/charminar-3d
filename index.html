@@ -254,6 +254,11 @@
   </div>
 
   <!-- ── Three.js CDN ─────────────────────────────────── -->
+  <script>
+    // Force scroll to top on page load/reload
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    window.scrollTo(0, 0);
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
   <script>
